@@ -89,10 +89,29 @@ JSON body:
 }
 ```
 
+
 ## Routing Logic
-- If question length < 8 words → simple → gpt-4o-mini
-- If question length < 20 words → medium → gpt-4.1
-- Otherwise → complex → gpt-4.1
+
+### Complexity Classification
+The classifier uses a combination of heuristics and keyword signals:
+
+- Query length
+- Reasoning words (e.g., why, how, explain, analyze, evaluate)
+- Comparison words (e.g., compare, difference, vs, versus)
+- Task/instruction words (e.g., design, build, implement, create, develop)
+- Technical/system keywords (e.g., architecture, distributed, scalable, pipeline, microservices, kubernetes, optimization, performance, algorithm, system)
+- Multi-part question structure (e.g., questions containing "and" or commas)
+
+Each signal increases a score:
+- Score ≤ 1: simple
+- Score ≤ 3: medium
+- Score > 3: complex
+
+### Model Routing
+The complexity is mapped to the LLM model:
+- simple → gpt-4o-mini
+- medium → gpt-4.1
+- complex → gpt-4.1
 
 ## System Architecture Overview
 ```

@@ -4,9 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def ask_llm(question: str, model_used: str) -> str:
     try:
@@ -17,4 +15,4 @@ def ask_llm(question: str, model_used: str) -> str:
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"OpenAI Error: {str(e)}"
