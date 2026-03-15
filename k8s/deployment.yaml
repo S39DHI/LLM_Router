@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm-router
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llm-router
+  template:
+    metadata:
+      labels:
+        app: llm-router
+    spec:
+      containers:
+        - name: llm-router
+          image: llm-router:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8000
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openai-secret
+                  key: api-key

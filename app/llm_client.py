@@ -8,10 +8,10 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-def ask_llm(question: str, model: str) -> str:
+def ask_llm(question: str, model_used: str) -> str:
     try:
         response = client.chat.completions.create(
-            model=model,
+            model=model_used,
             messages=[{"role": "user", "content": question}],
             max_tokens=256
         )
