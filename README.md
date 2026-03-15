@@ -418,22 +418,200 @@ The routing system consists of two main stages:
 
 ---
 
-## Complexity Classification
+## Query Classifier (`classifier.py`)
 
-The classifier evaluates multiple signals from the query.
+The classifier is responsible for analyzing the incoming user question and determining its **complexity level** before the request is routed to a specific LLM model.
 
-Signals include:
+Instead of using a machine learning model, this project implements a **rule-based heuristic classifier**. The goal of this approach is to keep the system lightweight, interpretable, and easy to extend without requiring training data.
 
-- Query length
-- Reasoning words
-- Comparison words
-- Task words
-- Technical keywords
-- Multi-part question structure
+The classifier evaluates several signals extracted from the input query. Each signal contributes to a **heuristic score**, which is then used to determine the final complexity category.
 
-Each signal increases the heuristic score.
+---
 
-Classification levels:
+### Design Goals
+
+The classifier was designed with the following goals:
+
+- **Low latency** – classification should be extremely fast.
+- **Explainability** – the reasoning behind classification should be transparent.
+- **Extensibility** – new rules and keywords can be added easily.
+- **No training data required** – avoids the need for datasets or model training.
+
+---
+
+### Signals Used for Classification
+
+The system evaluates multiple indicators to determine the complexity of a question.
+
+#### 1. Query Length
+
+Longer queries often indicate more complex requests.  
+Examples include questions that contain multiple requirements, explanations, or design requests.
+
+Example:
+
+```
+What is Kubernetes?
+```
+
+→ Likely **Simple**
+
+```
+Explain how Kubernetes handles scaling and fault tolerance in distributed systems.
+```
+
+→ Likely **Complex**
+
+A longer query therefore increases the heuristic score.
+
+---
+
+#### 2. Keyword Detection
+
+The classifier searches for specific keywords that typically appear in technical or reasoning-heavy questions.
+
+These keywords are grouped into different categories depending on the type of reasoning required.
+
+---
+
+### Keyword Categories
+
+#### Complex Technical Keywords
+
+These words often indicate system design, architecture discussions, or advanced technical topics.
+
+Examples:
+
+```
+architecture
+distributed
+scalable
+system
+pipeline
+microservices
+kubernetes
+optimization
+performance
+algorithm
+```
+
+If these words appear in the query, the complexity score increases because the question likely requires deeper explanation or technical reasoning.
+
+---
+
+#### Reasoning Keywords
+
+These words indicate that the user expects a conceptual explanation or analysis.
+
+Examples:
+
+```
+why
+how
+explain
+analyze
+evaluate
+```
+
+Example query:
+
+```
+Why does Kubernetes use pods instead of individual containers?
+```
+
+This type of question usually requires reasoning rather than a short factual answer.
+
+---
+
+#### Comparison Keywords
+
+These keywords suggest that the user is comparing multiple concepts or technologies.
+
+Examples:
+
+```
+compare
+difference
+vs
+versus
+```
+
+Example query:
+
+```
+Compare Kubernetes pods and Docker containers.
+```
+
+Comparison questions usually require structured explanations, increasing the complexity score.
+
+---
+
+#### Task / Instruction Keywords
+
+These words indicate that the user is asking the model to **design, implement, or create something**, which typically requires deeper reasoning.
+
+Examples:
+
+```
+design
+build
+implement
+create
+develop
+```
+
+Example query:
+
+```
+Design a scalable microservices architecture using Kubernetes.
+```
+
+Such tasks are typically categorized as **complex**.
+
+---
+
+### Multi-Part Query Detection
+
+The classifier also checks if the query contains multiple sub-questions.
+
+Example indicators:
+
+- Presence of **"and"**
+- Multiple commas
+- Multiple sentences
+
+Example:
+
+```
+Explain Kubernetes pods and how they differ from deployments.
+```
+
+Multi-part questions often require longer responses and therefore increase the complexity score.
+
+---
+
+### Heuristic Scoring System
+
+Each detected signal contributes to a numerical score.
+
+Example scoring rules:
+
+| Signal | Score Contribution |
+|------|------|
+Query length above threshold | +1 |
+Presence of reasoning keywords | +1 |
+Presence of comparison keywords | +1 |
+Presence of task/instruction keywords | +1 |
+Presence of complex technical keywords | +1 |
+Multi-part question detected | +1 |
+
+The final score determines the complexity category.
+
+---
+
+### Complexity Classification
+
+The classifier converts the score into one of three categories.
 
 ```
 Score ≤ 1  → Simple
@@ -441,13 +619,74 @@ Score ≤ 3  → Medium
 Score > 3  → Complex
 ```
 
+Examples:
+
+**Example 1**
+
+```
+What is Kubernetes?
+```
+
+Score: 0  
+Classification: **Simple**
+
 ---
 
-## Model Routing
+**Example 2**
 
-After classification, the router selects the LLM model dynamically.
+```
+Explain Kubernetes pods.
+```
 
-Current configuration:
+Score: 1  
+Classification: **Medium**
+
+---
+
+**Example 3**
+
+```
+Design a scalable distributed system using Kubernetes and explain the architecture.
+```
+
+Score: 4  
+Classification: **Complex**
+
+---
+
+### Advantages of This Approach
+
+This heuristic-based classifier provides several benefits:
+
+- Very fast execution
+- Easy to understand and debug
+- Simple to extend with new keywords
+- No external dependencies or training required
+
+While machine learning models could be used for classification, a heuristic approach is often sufficient for lightweight routing systems.
+
+---
+
+# Routing Logic
+
+After the query complexity has been determined by the classifier, the **router module** selects the appropriate LLM model to generate the response.
+
+The router is implemented in `router.py` and uses a **mapping-based configuration** that associates complexity levels with specific models.
+
+---
+
+## Routing Strategy
+
+The routing system aims to optimize two competing factors:
+
+1. **Response quality**
+2. **API cost and latency**
+
+More capable models generally provide better reasoning but are also more expensive and slower. Therefore, simple queries should be handled by cheaper models whenever possible.
+
+---
+
+### Current Routing Configuration
 
 ```
 Simple   → gpt-4o-mini
@@ -455,14 +694,126 @@ Medium   → gpt-4.1
 Complex  → gpt-4.1
 ```
 
-The router uses a **mapping-based design**, making it easy to extend.
+---
 
-Example future routing:
+### Simple Queries
+
+Simple queries are typically factual or definitional.
+
+Examples:
 
 ```
-Simple → cheaper fast model
-Medium → balanced model
-Complex → high reasoning model
+What is Kubernetes?
 ```
 
-This dynamic routing strategy helps reduce cost while maintaining high-quality responses.
+These queries are routed to **gpt-4o-mini**, which is:
+
+- faster
+- lower cost
+- sufficient for basic explanations
+
+---
+
+### Medium Queries
+
+Medium queries require explanation or reasoning but are not full system design problems.
+
+Example:
+
+```
+Explain Kubernetes pods.
+```
+
+These are routed to **gpt-4.1**, which provides stronger reasoning capabilities.
+
+---
+
+### Complex Queries
+
+Complex queries often involve:
+
+- architecture design
+- multi-step reasoning
+- comparisons between systems
+
+Example:
+
+```
+Design a scalable Kubernetes architecture for microservices.
+```
+
+These queries are also routed to **gpt-4.1**, which has stronger reasoning and generation capabilities.
+
+---
+
+### Why Use Mapping-Based Routing
+
+The routing system is implemented using a mapping structure similar to:
+
+```
+{
+  "simple": "gpt-4o-mini",
+  "medium": "gpt-4.1",
+  "complex": "gpt-4.1"
+}
+```
+
+This design provides several advantages:
+
+- Easy to modify model assignments
+- Easy to introduce additional models
+- Clear separation between classification and routing logic
+
+---
+
+### Example Future Extension
+
+The router could easily be extended with additional models.
+
+Example:
+
+```
+Simple   → local LLM
+Medium   → gpt-4o-mini
+Complex  → gpt-4.1
+```
+
+This would allow further cost optimization while maintaining quality.
+
+---
+
+### End-to-End Routing Flow
+
+```
+User Query
+     ↓
+Complexity Classifier
+     ↓
+Complexity Level (Simple / Medium / Complex)
+     ↓
+Model Router
+     ↓
+Selected LLM Model
+     ↓
+Generate Answer
+     ↓
+Return API Response
+```
+
+---
+
+### Final API Response Structure
+
+The API returns both the classification result and the selected model.
+
+Example:
+
+```
+{
+ "complexity": "simple",
+ "model_used": "gpt-4o-mini",
+ "answer": "A Kubernetes Pod is the smallest deployable unit..."
+}
+```
+
+This transparency allows users to understand how the system routed their query.
