@@ -5,6 +5,10 @@ A FastAPI service that receives a user question, classifies its complexity, rout
 
 The system is designed to balance **cost and performance** by dynamically selecting the most suitable model based on query complexity.
 
+📄 **Detailed Routing Logic Document**
+
+[View Full PDF Explanation](images/router_llm.pdf)
+
 Tested With:
 - Python 3.11
 - Docker
@@ -410,6 +414,16 @@ JSON body:
 ---
 
 # Routing Logic
+
+### Design Consideration: RouteLLM
+
+During the design phase, frameworks such as **RouteLLM** were considered.
+
+RouteLLM uses embedding-based routing, where queries are converted into vector embeddings and compared against routing policies or examples to determine the most appropriate LLM model.
+
+While this approach can provide strong routing accuracy, it introduces additional complexity such as embedding models and similarity computations.
+
+For this implementation, a **custom heuristic-based router** was chosen instead. This keeps the system lightweight, interpretable, and easy to modify while still demonstrating the core principles of LLM routing.
 
 The routing system consists of two main stages:
 
